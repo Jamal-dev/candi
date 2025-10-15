@@ -2,33 +2,7 @@
 ## PETSc                                                                      ##
 ################################################################################
 
-VERSION=3.22.4;CHECKSUM=97503bfdd921069b997dd875a60b7a0d
-
-#VERSION=3.22.2;CHECKSUM=d18caed83d1bf351c4ccb574b0b376e5
-
-#VERSION=3.21.6;CHECKSUM=ab98f5f22731549eda3ae2704b05e9f7
-
-#VERSION=3.21.4;CHECKSUM=e8d76467696fcff970bd56c93dd83476
-
-#VERSION=3.19.4;CHECKSUM=477c30e120498dba4fad01020d4b0ffc
-
-#VERSION=3.18.6;CHECKSUM=8eb924facc586b3368536ad2b9df1d35
-
-#VERSION=3.16.4
-#CHECKSUM=7de82ee5543cba9a7c12ca00c81f0b87
-
-#VERSION=3.13.1
-#CHECKSUM=b8b99c4a16fbc7d6694a70af044dbaac
-
-#VERSION=3.11.3
-#CHECKSUM=e04cbb1aaccde4a33c8843e75a1fba15
-
-#VERSION=3.7.6
-#CHECKSUM=152c1f15f535af22fc015de1d3099db3
-
-#VERSION=3.6.4
-#CHECKSUM=e7a5253621253eef8f5a19ddc03dd0d4
-
+VERSION=3.24.0;CHECKSUM=2e798e2af5676d60132518878d83f842
 NAME=petsc-${VERSION}
 SOURCE=https://web.cels.anl.gov/projects/petsc/download/release-snapshots/
 PACKING=.tar.gz
@@ -37,7 +11,6 @@ EXTRACTSTO=petsc-${VERSION}
 BUILDCHAIN=custom
 
 INSTALL_PATH=${INSTALL_PATH}/${EXTRACTSTO}
-
 
 ################################################################################
 
@@ -69,11 +42,6 @@ CONFOPTS="\
   "
 fi
 
-# It would seem simpler to put the {C|CXX|F}OPTFLAGS directly into the
-# CONFOPTS variable, but there is no easy way to quote the
-# multiarguments and retain the quotes correctly when passing to
-# PETSc. Instead, we specify the individual *OPTFLAGS in the call to
-# ./configure below.
 if [ ${NATIVE_OPTIMIZATIONS} = ON ]; then
     OPTFLAGS="-O3 -march=native -mtune=native"
 else
@@ -118,22 +86,16 @@ else
     fi
 fi
 
-# Add ParMETIS, if present
-if [ ! -z "${PARMETIS_DIR}" ]; then
-    cecho ${INFO} "PETSc: configuration with ParMETIS"
-    CONFOPTS="${CONFOPTS} \
-      --with-parmetis-dir=${PARMETIS_DIR} \
-      --with-metis-dir=${PARMETIS_DIR}"
-fi
+# Let PETSc download and build its own known-compatible versions of its
+# dependencies. This is the most robust way to ensure compatibility.
+cecho ${INFO} "PETSc: configured to download dependencies"
+CONFOPTS="${CONFOPTS} \
+  --download-parmetis=1 \
+  --download-metis=1 \
+  --download-slepc=1 \
+  --download-scalapack=1"
 
-if [ ! -z "${SCALAPACK_DIR}" ]; then
-    cecho ${INFO} "PETSc: configuration with SCALAPACK"
-    CONFOPTS="${CONFOPTS} \
-      --with-scalapack-dir=${SCALAPACK_DIR}"
-else
-    CONFOPTS="${CONFOPTS} --download-scalapack=1"
-fi
-
+# The MUMPS download is handled separately as it may require registration.
 if [ ! -z "${MUMPS_DIR}" ]; then
     cecho ${INFO} "PETSc: configuration with MUMPS"
     CONFOPTS="${CONFOPTS} \
@@ -147,36 +109,33 @@ fi
 package_specific_setup () {
     cd ${BUILDDIR}
     cp -rf ${UNPACK_PATH}/${EXTRACTSTO}/* .
-
-    # Make sure we don't pick up any environment copies of PETSc variables. This
-    # duplicates the same unset commands in candi.sh to ensure that, should this
-    # function run as a shell script (i.e., not with the source command), they
-    # are not reset by .bash_profile or some other shell initialization script.
     unset PETSC_DIR
     unset PETSC_ARCH
 
-    ${PYTHON_INTERPRETER} ./configure --prefix=${INSTALL_PATH} ${CONFOPTS} COPTFLAGS="${OPTFLAGS}" CXXOPTFLAGS="${OPTFLAGS}" FOPTFLAGS="${OPTFLAGS}"
+    ${PYTHON_INTERPRETER} ./configure --prefix=${INSTALL_PATH} ${CONFOPTS} \
+        COPTFLAGS="${OPTFLAGS}" CXXOPTFLAGS="${OPTFLAGS}" FOPTFLAGS="${OPTFLAGS}"
     quit_if_fail "petsc ./configure failed"
     
     make all install
     quit_if_fail "petsc make all install failed"
 }
 
+# --- FIX APPLIED HERE ---
+# After PETSc installs itself and its dependencies (SLEPc, ScaLAPACK),
+# export the correct environment variables so subsequent packages like deal.II
+# can find them all in the same location.
 package_specific_register () {
     export PETSC_DIR=${INSTALL_PATH}
-    if [ ! -z "${SCALAPACK_DIR}" ]; then
-        export SCALAPACK_DIR=${INSTALL_PATH}
-    fi
+    export SLEPC_DIR=${INSTALL_PATH}
+    export SCALAPACK_DIR=${INSTALL_PATH}
 }
 
 package_specific_conf () {
-    # Generate configuration file
     CONFIG_FILE=${CONFIGURATION_PATH}/${EXTRACTSTO}
     rm -f ${CONFIG_FILE}
     echo "
 export PETSC_DIR=${INSTALL_PATH}
+export SLEPC_DIR=${INSTALL_PATH}
+export SCALAPACK_DIR=${INSTALL_PATH}
 " >> ${CONFIG_FILE}
-    if [ ! -z "${SCALAPACK_DIR}" ]; then
-       echo "export SCALAPACK_DIR=${INSTALL_PATH}" >> ${CONFIG_FILE}
-    fi
 }

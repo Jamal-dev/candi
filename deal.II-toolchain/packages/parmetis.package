@@ -1,31 +1,67 @@
-VERSION=4.0.3
-NAME=parmetis-${VERSION}
-SOURCE=https://karypis.github.io/glaros/files/sw/parmetis/
-PACKING=.tar.gz
-CHECKSUM=f69c479586bf6bb7aff6a9bc0c739628
+# This file builds GKlib, METIS, and ParMETIS from their official Git repos
+# and patches/compiles them correctly for shared library usage.
+VERSION=main
+NAME=ParMETIS.git
+SOURCE=https://github.com/KarypisLab/
+PACKING=git
+EXTRACTSTO=ParMETIS
 BUILDCHAIN=custom
 
 INSTALL_PATH=${INSTALL_PATH}/${NAME}
 
 package_specific_build() {
-    cp -rf ${UNPACK_PATH}/${EXTRACTSTO}/* .
+    # --- Step 1: Build and Install GKlib ---
+    cecho ${GOOD} "Building GKlib dependency first"
+    cd ${UNPACK_PATH}
     
-    # Firstly build metis
-    cd metis
+    if [ ! -d "GKlib" ]; then
+        git clone https://github.com/KarypisLab/GKlib.git
+        quit_if_fail "Cloning GKlib failed"
+    fi
     
-    make config prefix=${INSTALL_PATH} shared=1
-    quit_if_fail "parmetis/metis make config failed"
+    cd GKlib
+    cecho ${WARN} "patching GKlib/CMakeLists.txt for modern CMake"
+    sed -i 's/cmake_minimum_required( *VERSION *[23]\.[0-9].*)/cmake_minimum_required(VERSION 3.16)/g' CMakeLists.txt
+
+    # Add CFLAGS="-fPIC" to compile as position-independent code
+    make config prefix=${INSTALL_PATH} cc=${CC} CFLAGS="-fPIC"
+    quit_if_fail "GKlib make config failed"
     
     make -j${JOBS}
-    quit_if_fail "parmetis/metis make failed"
+    quit_if_fail "GKlib make failed"
     
     make install
-    quit_if_fail "parmetis/metis make install failed"
+    quit_if_fail "GKlib make install failed"
+
+    # --- Step 2: Build and Install METIS ---
+    cecho ${GOOD} "Building METIS dependency"
+    cd ${UNPACK_PATH}
     
-    # Secondly build parmetis
-    cd ..
+    if [ ! -d "METIS" ]; then
+        git clone https://github.com/KarypisLab/METIS.git
+        quit_if_fail "Cloning METIS failed"
+    fi
     
-    make config prefix=${INSTALL_PATH} shared=1 cc=${CC} cxx=${CXX}
+    cd METIS
+    cecho ${WARN} "patching METIS/CMakeLists.txt for modern CMake"
+    sed -i 's/cmake_minimum_required( *VERSION *[23]\.[0-9].*)/cmake_minimum_required(VERSION 3.16)/g' CMakeLists.txt
+    
+    # Add CFLAGS="-fPIC" here as well for consistency
+    make config prefix=${INSTALL_PATH} cc=${CC} shared=1 gklib_path=${INSTALL_PATH} CFLAGS="-fPIC"
+    quit_if_fail "metis make config failed"
+    
+    make -j${JOBS}
+    quit_if_fail "metis make failed"
+    
+    make install
+    quit_if_fail "metis make install failed"
+
+    # --- Step 3: Build and Install ParMETIS ---
+    cecho ${GOOD} "Building ParMETIS"
+    cd ${UNPACK_PATH}/${EXTRACTSTO}
+        
+    # Add CFLAGS="-fPIC" here as well
+    make config prefix=${INSTALL_PATH} cc=${CC} shared=1 gklib_path=${INSTALL_PATH} metis_path=${INSTALL_PATH} CFLAGS="-fPIC"
     quit_if_fail "parmetis make config failed"
     
     make -j${JOBS}
@@ -36,19 +72,9 @@ package_specific_build() {
 }
 
 package_specific_patch () {
-    if [ ${PLATFORM_OSTYPE} == linux ]; then
-        if [ ${VERSION} == "4.0.3" ]; then
-            cd ${UNPACK_PATH}/${EXTRACTSTO}
-            cecho ${WARN} "applying patch for building METIS shared libraries"
-            patch -p0 --forward < ${ORIG_DIR}/${PROJECT}/patches/parmetis-4.0.3-build.patch || true
-
-            if [ ${USE_64_BIT_INDICES} = ON ]; then
-            cd ${UNPACK_PATH}/${EXTRACTSTO}
-            cecho ${WARN} "applying patch for 64bit ParMETIS"
-            patch -p0 --forward < ${ORIG_DIR}/${PROJECT}/patches/parmetis-4.0.3-64bit.patch || true
-            fi
-        fi
-    fi
+    cd ${UNPACK_PATH}/${EXTRACTSTO}
+    cecho ${WARN} "patching ParMETIS/CMakeLists.txt for modern CMake"
+    sed -i 's/cmake_minimum_required( *VERSION *[23]\.[0-9].*)/cmake_minimum_required(VERSION 3.16)/g' CMakeLists.txt
 }
 
 package_specific_register () {
@@ -61,7 +87,6 @@ package_specific_register () {
 }
 
 package_specific_conf () {
-    # Generate configuration file
     CONFIG_FILE=${CONFIGURATION_PATH}/${NAME}
     rm -f $CONFIG_FILE
     echo "
@@ -74,4 +99,3 @@ export PARMETIS_DIR=${INSTALL_PATH}
 " >> $CONFIG_FILE
     fi
 }
-

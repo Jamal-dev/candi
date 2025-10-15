@@ -212,6 +212,14 @@ fi
 
 ########################################
 # SLEPC
+# --- FIX APPLIED HERE ---
+# If PETSC_DIR is set and SLEPC_DIR is not (because PETSc downloaded SLEPc),
+# then we explicitly set SLEPC_DIR to be the same as PETSC_DIR.
+if [ ! -z "${PETSC_DIR}" ] && [ -z "${SLEPC_DIR}" ]; then
+    cecho ${INFO} "deal.II: slepc package disabled, assuming SLEPc is part of PETSc"
+    export SLEPC_DIR=${PETSC_DIR}
+fi
+
 if [[ ${PACKAGES_OFF} =~ 'slepc' ]]; then
     if [ ! -z "${SLEPC_DIR}" ]; then
         cecho ${INFO} "deal.II: unset SLEPC_DIR due to forced DEAL_II_WITH_SLEPC:BOOL=OFF option"
@@ -374,7 +382,7 @@ module-whatis          \"Provides the deal.II toolbox.\"
 conflict                deal.II
 module load ${CURRENT_MODULES}
 
-setenv                  DEAL_II_DIR         ${INSTALL_PATH}
+setenv               DEAL_II_DIR         ${INSTALL_PATH}
 " >> $CONFIG_FILE
     
     echo
@@ -402,5 +410,3 @@ export DEAL_II_DIR=${INSTALL_PATH}
     cecho ${GOOD} "    source $CONFIG_FILE"
     echo
 }
-
-

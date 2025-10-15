@@ -1,53 +1,34 @@
 ################################################################################
-## SUNDIALS                                                                   ##
+## SUNDIALS (Official LLNL Git Repository)                                    ##
 ################################################################################
 
-# By default load the tarball.
-# To load the git repository define a variable CANDI_SUNDIALS_LOAD_TARBALL=OFF.
-if [ -z ${CANDI_SUNDIALS_LOAD_TARBALL} ]; then
-    CANDI_SUNDIALS_LOAD_TARBALL=ON
-fi
-
-if [ ${CANDI_SUNDIALS_LOAD_TARBALL} = ON ]; then
-    # 2021/07/01
-    VERSION=5.7.0
-    CHECKSUM=48da7baa8152ddb22aed1b02d82d1dbb4fbfea22acf67634011aa0303a100a43
-    CHECKSUM="${CHECKSUM} c04ecc9102851955b62e626a43ad5f604e890ab0"
-    CHECKSUM="${CHECKSUM} 483784dab433f178e79072bbed98c38c"
-
-    # VERSION=3.1.0
-    # CHECKSUM=1a84ca41c7f71067e03d519ddbcd9dae
-
-    NAME=sundials-${VERSION}
-    PACKING=.tar.gz
-    EXTRACTSTO=sundials-${VERSION}
-    SOURCE=https://github.com/LLNL/sundials/releases/download/v${VERSION}/
-else
-
-    VERSION=v5.7.0
-    # VERSION=v3.2.1
-
-    NAME=sundials
-    PACKING=git
-    SOURCE=https://github.com/LLNL/
-    EXTRACTSTO=${NAME}-${VERSION}
-fi
-unset CANDI_SUNDIALS_LOAD_TARBALL
+# Download the latest master branch from the official Sundials repository.
+VERSION=main
+NAME=sundials
+PACKING=git
+SOURCE=https://github.com/LLNL/
+EXTRACTSTO=sundials
 
 BUILDCHAIN=cmake
 
-BUILDDIR=${BUILD_PATH}/sundials-${VERSION}
-INSTALL_PATH=${INSTALL_PATH}/sundials-${VERSION}
+# Set build and install paths based on the new directory name
+BUILDDIR=${BUILD_PATH}/${EXTRACTSTO}
+INSTALL_PATH=${INSTALL_PATH}/${EXTRACTSTO}
 
-# In versions prior to v5.7.0 the deprecated options MPI_ENABLE instead of the
-# new ENABLE_MPI option was used.
+# Use modern CMake flags compatible with the official Sundials build system.
 CONFOPTS="\
   -D ENABLE_MPI:BOOL=ON \
   -D CMAKE_BUILD_TYPE=Release \
-  -D EXAMPLES_ENABLE_C=OFF \
-  -D EXAMPLES_INSTALL=OFF \
+  -D EXAMPLES_ENABLE_C:BOOL=OFF \
+  -D EXAMPLES_INSTALL:BOOL=OFF \
   -D BUILD_SHARED_LIBS:BOOL=ON"
 
+# The patch is no longer needed for the modern source code.
+package_specific_patch () {
+    true
+}
+
+# This is still needed for deal.II to find the installation.
 package_specific_register() {
     export SUNDIALS_DIR=${INSTALL_PATH}
 }
